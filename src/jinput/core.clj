@@ -1,10 +1,8 @@
 (ns jinput.core
   (:import [net.java.games.input ControllerEnvironment Event]))
 
-(defn controllers []
-  (->> (ControllerEnvironment/getDefaultEnvironment)
-       (.getControllers)
-       (into [])))
+(defn components [controller]
+  (into {} (map #(-> [(keyword (.getName %)) %]) (.getComponents controller))))
 
 (defn controller-type [controller]
   (-> controller .getType .toString))
@@ -12,45 +10,46 @@
 (defn joystick? [controller]
   (= "Stick" (controller-type controller)))
 
-(defn components [controller]
-  (into {} (map #(-> [(keyword (.getName %)) %]) (.getComponents controller))))
+(defn controllers []
+  (->> (ControllerEnvironment/getDefaultEnvironment)
+       (.getControllers)
+       (into [])))
 
-(defn values [components]
+(defn controller-map [controller]
+  {:type (controller-type controller)
+   :controller controller
+   :components (components controller)})
+
+(defn values [controller-map & keys]
+  (.poll (:controller controller-map))
   (reduce (fn [values [component-key component]]
             (assoc values component-key (.getPollData component)))
           {}
-          components))
+          (select-keys (:components controller-map)
+                       keys)))
 
-(let [controller (->> (controllers)
-                      (filter joystick?)
-                      (first))
-      components (components controller)
+(defn joystick-controller-map []
+  (->> (controllers)
+       (filter joystick?)
+       (first)
+       (controller-map)))
 
-      event (Event.)]
-  
-  (loop []
-    (let [event-queue (.getEventQueue controller)]
-      (while (.getNextEvent event-queue event)
-        (let [component-name (.getName (.getComponent event))]
-          (when (not (#{"x" "y" "z" "rz"} component-name))
-            (println component-name  (.getValue event))))))
-    
-    (.poll controller)
-    (println (select-keys (values components)
-                          [:x :y :z :rz]))
-    (Thread/sleep 1000)
-    (recur)))
+#_(let [controller (->> (controllers)
+                        (filter joystick?)
+                        (first)
+                        (controller-map))
 
+        event (Event.)]
+    (println controller)
 
+    (loop []
+      #_(let [event-queue (.getEventQueue controller)]
+          (while (.getNextEvent event-queue event)
+            (let [component-name (.getName (.getComponent event))]
+              (when (not (#{"x" "y" "z" "rz"} component-name))
+                (println component-name  (.getValue event))))))
 
-
-
-
-
-
-
-
-
-
-
-
+      #_(.poll controller)
+      (println (values controller [:x :y :z :rz]))
+      (Thread/sleep 1000)
+      (recur)))
